@@ -1,0 +1,226 @@
+---
+title: "Untitled"
+author: "Vineet Kapoor"
+date: "February 28, 2018"
+output: html_document
+---
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+
+DF <- read.csv('CC GENERAL.csv')
+df <- DF
+head(df)
+tail(df)
+summary(df)  ###missing values in minimum payments###
+ str(df)
+ X <- !is.na(df['MINIMUM_PAYMENTS'])
+summary(X)
+
+```
+
+```{r}
+
+require(dplyr)
+require(ggplot2)
+
+###make new KPIs
+#df$TENURE <- as.factor(df$TENURE)
+
+df$limit_usage <- df$BALANCE/df$CREDIT_LIMIT
+df$pay_ratio <- df$PAYMENTS/df$MINIMUM_PAYMENTS
+df$monthly_Cash_Advance = df$CASH_ADVANCE/df$TENURE
+df$monthly_avg_purchase = df$PURCHASES/df$TENURE
+
+```
+
+```{r}
+###df is a Dataframe and purchase type is a new variable
+
+df$purchase_type[df$ONEOFF_PURCHASES == 0 & df$INSTALLMENTS_PURCHASES == 0] <- "None"
+df$purchase_type[df$ONEOFF_PURCHASES > 0 & df$INSTALLMENTS_PURCHASES == 0] <- "one_off_purchase"
+df$purchase_type[df$ONEOFF_PURCHASES == 0 & df$INSTALLMENTS_PURCHASES > 0] <- "installment_purchase"
+df$purchase_type[df$ONEOFF_PURCHASES > 0 & df$INSTALLMENTS_PURCHASES > 0] <- "Both"
+
+View(df)
+summary(df)
+
+
+```
+
+
+```{r}
+##first plot - most of the customers have 12 months as tenure  and credit limit is rightly skewed
+q <- ggplot(data = df,aes(x = CREDIT_LIMIT))
+q + geom_histogram(aes(fill = TENURE),binwidth = 2000,colour = "black")
+
+### scatter- plot
+
+cor.test(df$PURCHASES_TRX,df$CREDIT_LIMIT) ##-0.5 moderately (-ve) correlation
+ScatterPlot3 <- ggplot(df, aes(x=df$PURCHASES_TRX, y=df$CREDIT_LIMIT)) 
+ScatterPlot3 + geom_point(shape=19,alpha = 1/20) + geom_smooth(method = lm,fill="NA")
+
+############  - left skewed
+q1 <- ggplot(data = df,aes(x = BALANCE_FREQUENCY))
+q1 + geom_histogram(binwidth = 0.25,fill = "blue")
+
+```
+
+```{r}
+
+mystats <- function(x) {
+  nmiss<-sum(is.na(x))
+  a <- x[!is.na(x)]
+  m <- mean(a)
+  n <- length(a)
+  s <- sd(a)
+  min <- min(a)
+  pctls<-quantile(a,probs=c(0.01, 0.05,0.1,0.25,0.5,0.75,0.9,0.95,0.99))
+  max <- max(a)
+  return(c(n=n, nmiss=nmiss,  mean=m, stdev=s,min = min, pctls=pctls,max=max))
+}
+
+vars <- c("BALANCE","BALANCE_FREQUENCY","PURCHASES","ONEOFF_PURCHASES","INSTALLMENTS_PURCHASES","CASH_ADVANCE","PURCHASES_FREQUENCY","ONEOFF_PURCHASES_FREQUENCY"
+           ,"PURCHASES_INSTALLMENTS_FREQUENCY","CASH_ADVANCE_FREQUENCY","CASH_ADVANCE_TRX","PURCHASES_TRX","CREDIT_LIMIT","PAYMENTS","MINIMUM_PAYMENTS","PRC_FULL_PAYMENT","TENURE","limit_usage","pay_ratio")
+colnames(df)
+diag_stats<-t(data.frame(apply(df[vars],2, mystats)))
+
+write.csv(diag_stats, "diag_stats.csv")
+write.csv(df[vars], "d.csv")
+```
+
+```{r}
+
+####removing Null values####
+df <- df[complete.cases(df$MINIMUM_PAYMENTS), ]
+df$CREDIT_LIMIT[is.na(df$CREDIT_LIMIT)] <- 0
+df$pay_ratio[is.na(df$pay_ratio)] <- 0
+df$limit_usage[is.na(df$limit_usage)] <- 0
+
+
+summary(df)
+#######outliers removal from data
+
+df$PURCHASES[df$PURCHASES> 3998.6195] <- 3998.6195
+df$ONEOFF_PURCHASES[df$ONEOFF_PURCHASES > 2671.094] <- 2671.094
+df$INSTALLMENTS_PURCHASES[df$INSTALLMENTS_PURCHASES> 3886.2405] <- 3886.2405
+df$CASH_ADVANCE[df$CASH_ADVANCE > 9588.163357] <- 9588.163357
+df$BALANCE[df$BALANCE > 5909.111808] <- 5909.111808
+df$CASH_ADVANCE_TRX[df$CASH_ADVANCE_TRX > 29] <- 29
+df$PURCHASES_TRX[df$PURCHASES_TRX > 116.51] <- 116.51
+df$PAYMENTS[df$PAYMENTS > 13608.71554] <- 13608.71554
+df$MINIMUM_PAYMENTS[df$MINIMUM_PAYMENTS > 2766.56331] <- 2766.56331
+df$pay_ratio[df$pay_ratio > 50.40582994] <- 50.40582994
+df$limit_usage[df$limit_usage > 1.057060741] <- 1.057060741
+
+final_data <- df[vars]
+```
+
+
+```{r}
+#####scaling the data
+
+final_data <- scale(final_data)
+
+```
+
+```{r}
+##### k-means clustering ######
+
+cluster_three <- kmeans(final_data,3)
+cluster_four <- kmeans(final_data,4)
+cluster_five <- kmeans(final_data,5)
+cluster_six <- kmeans(final_data,6)
+```
+
+
+```{r}
+#####append the clusters ----- after creating clusters ---------append clusters now
+df_new<-cbind(df,km_clust_3=cluster_three$cluster,km_clust_4=cluster_four$cluster,km_clust_5=cluster_five$cluster ,km_clust_6=cluster_six$cluster)
+View(df_new)
+
+
+#Graph based on k-means - Optional
+require(cluster)
+
+  
+clusplot(final_data, #dataframe
+           cluster_three$cluster, #clusterdata
+           color = TRUE, #color
+           #shade = TRUE, # Lines in clusters
+           lines =6, # lines connecting centroids
+           labels = 2 # Labels clusters and cases
+  )
+
+
+###Profiling
+#Converting into factors
+df_new$km_clust_3=factor(df_new$km_clust_3)
+df_new$km_clust_4=factor(df_new$km_clust_4)
+df_new$km_clust_5=factor(df_new$km_clust_5)
+df_new$km_clust_6=factor(df_new$km_clust_6)
+
+####
+require(tables)
+profile<-tabular(1+BALANCE+BALANCE_FREQUENCY+PURCHASES+ONEOFF_PURCHASES+INSTALLMENTS_PURCHASES+CASH_ADVANCE+PURCHASES_FREQUENCY+ONEOFF_PURCHASES_FREQUENCY+PURCHASES_INSTALLMENTS_FREQUENCY+CASH_ADVANCE_FREQUENCY+CASH_ADVANCE_TRX+PURCHASES_TRX+CREDIT_LIMIT+PAYMENTS+MINIMUM_PAYMENTS+PRC_FULL_PAYMENT+limit_usage+pay_ratio
+~mean+(mean*km_clust_3)+(mean*km_clust_4)+(mean*km_clust_5)+(mean*km_clust_6),
+                 data=df_new)
+profile1<-as.matrix(profile)
+profile1<-data.frame(profile1)
+View(profile1)
+
+profile<-tabular(1~length+(length*km_clust_3)+(length*km_clust_4)+(length*km_clust_5)+(length*km_clust_6),
+                 data=df_new)
+profile2<-as.matrix(profile)
+profile2<-data.frame(profile2)
+View(profile2)
+
+write.csv(profile1,"profile1.csv",row.names = F)
+write.csv(profile2,"profile2.csv",row.names = F)
+
+```
+
+```{r}
+
+
+#####FACTOR ANALYSIS#####
+class(df)
+
+## FACTOR ANALYSIS 
+corrm<- cor(df[vars])         ###CORRELATION MATRIX
+df[vars]
+require(psych)
+require(GPArotation)
+
+###summary
+
+summary(final_data)
+
+require(dplyr)
+eigen_values <- mutate(data.frame(eigen(corrm)$values)
+                       ,cum_sum_eigen=cumsum(eigen.corrm..values)
+                       , pct_var=eigen.corrm..values/sum(eigen.corrm..values)
+                       , cum_pct_var=cum_sum_eigen/sum(eigen.corrm..values))  # CALCULATING VARIANCE, CUMULATIVE VARIANCE etc... 
+
+write.csv(eigen_values,"eigen_values.csv")  ### EXPORTING EIGEN VALUE SUMMARY
+
+
+FA<-fa(r=corrm, 9, rotate="varimax", fm="ml")           ### CONDUCTING FACTOR ANALYSIS
+print(FA)                                               ### PRINT THE RESULTS
+FA_SORT<-fa.sort(FA)                                    ### SORTING THE LOADINGS
+ls(FA_SORT)     ###meaning????                          ### LISTING OUT THE OBJECTS
+FA_SORT$loadings
+#FA_SORT$e.values                                            ### FINDING EIGEN VALUES FROM THE RESULTS
+Loadings<-data.frame(FA_SORT$loadings[1:ncol(df[vars]),]) ### CAPTURING ONLY LOADINGS INTO DATA FRAME
+
+write.csv(Loadings, "loadings.csv") ### SAVING THE FILE
+```
+
+
+
+
