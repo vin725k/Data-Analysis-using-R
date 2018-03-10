@@ -1,0 +1,222 @@
+---
+title: "EDA of visitors on a Website Data"
+author: "Vineet Kapoor"
+date: "March 10, 2018"
+output: html_document
+---
+```{r}
+require(xlsx)
+require(readxl)
+df <- readxl::read_excel("prob_Assignment_Dataset.xlsx")
+zappos <- df
+head(df)
+str(df)
+View(df)
+df$new_customer <- as.factor(df$new_customer)
+
+```
+
+```{r}
+###making new cols
+df$conversion_rate <- df$orders/df$visits
+df$bounce_rate <- df$bounces/df$visits
+df$add_to_cart_rate <- df$add_to_cart/df$visits
+names(df)
+
+```
+
+```{r}
+require(ggplot2)
+# number of customers by platforms
+#IOS and android platforms has highest number of users
+qplot(platform,data = subset(df,!is.na(platform)),fill = site,main="Count of users as per site and Platforms")
+table(df$platform)
+
+# number of customers by site
+# Acme has highest number of users , Pinnacle is second, Sortly is third
+qplot(site,data = df,xlab = "count of users", main="Count of users as per site")
+names(df)
+```
+
+```{r}
+#visits - analysis can be done
+q <- ggplot(data = df,aes(x = visits))
+q + geom_histogram(binwidth = 900,aes(fill=site),colour = "black") +coord_cartesian(xlim = c(0,30000))
+
+```
+
+```{r}
+#conversion_rate - analyse this 
+q1 <- ggplot(data = df,aes(x = conversion_rate))
+q1 + geom_histogram(binwidth = 0.1,aes(fill=site),colour = "black")+facet_grid(site~.,scales = "free") + labs(x='conversion rate' ,y = 'count of users') +ggtitle("variation in count of users on the basis of conversion rate for each site")
+
+```
+
+```{r}
+#bounce rate
+# The Distribution is Right Skewed
+q2 <- ggplot(data = df,aes(x = bounce_rate))
+q2 + geom_histogram(binwidth = 0.1,fill="white",colour = "blue") +facet_grid(site~.,scales = "free") + labs(x='Bounce rate' ,y = 'count of users') +ggtitle("variation in count of users on the basis of bounce rate for each site")
+```
+
+```{r}
+#add_to_cart_rate
+#the distribution is right skewed
+qplot(add_to_cart_rate,data = df,binwidth = 0.1, geom = c('density'), main = "Density plot of add to cart rate")
+```
+
+```{r}
+##normal data for gross sales after removing Missing values - analyse this
+## Log transformation on Gross sales - - Distribution is normal for most of the platforms
+summary(log(df$gross_sales+1))
+qplot(x=log(df$gross_sales+1),data = df,fill = platform,xlab = "Gross Sales",ylab = "count of users",main = "Report of count of users as per the platform") +facet_wrap(~platform) 
+qplot(x=log(df$gross_sales+1),data = df,fill=site,xlab = "Gross Sales",ylab = "count of users",main = "Report of count of users as per the site") +facet_wrap(~site)
+
+```
+
+```{r}
+######################## Q-12 - - Bivariate 
+library(dplyr)
+```
+
+```{r}
+##number of orders are hiest for windows users
+dd2<-aggregate(orders~platform,data=df, FUN=sum)
+dd2
+
+gross_sales_by_site<-aggregate(gross_sales~site,data=df, FUN=mean)
+gross_sales_by_site
+
+group <- group_by(df,site)
+f <- summarise(group,
+               order = n(),
+               gross_sales = mean(gross_sales,na.rm = T),
+               product_page_views_median = median(product_page_views))
+f
+```
+
+```{r}
+##bvariate analysis 
+product_conditional_mean_by <- summarise(group, product_page_views_mean = mean(product_page_views),
+                                         product_page_views_median = median(product_page_views), n=n())
+
+```
+
+```{r}
+#What are the observations # by product_page_views
+ggplot(aes(site,product_page_views_mean),data=product_conditional_mean_by)+geom_line(group =1,
+                                                                                     stat='summary',fun.y =mean,linetype=13,color='blue') + labs(x='site names' ,y = 'mean of product page views') +ggtitle("variation in mean of product page views as per the site")
+
+```
+
+
+```{r}
+#Let us now look at box plot - analysis of site by gross sales-  analyse this
+qplot(x=site, y=gross_sales, data=df,color = site)+coord_cartesian(ylim=c(0,100000))
+qplot(x=site, y=gross_sales, data=df,geom=c('jitter','boxplot'),color = site,alpha = 0.1)+coord_cartesian(ylim=c(0,60000))
+
+```
+
+```{r}
+###comparing 2 variables
+df$new_customer = factor(
+  df$new_customer, levels = c("0","1","NA"),
+  labels = c("Returned Customer", "New Customer","neither" )
+)
+table(df$new_customer)
+```
+
+```{r}
+##Boxplot analysis
+qplot(x=new_customer, y=bounce_rate, data=df,geom=c('jitter','boxplot'),fill = new_customer,alpha = 0.1,main = "Boxplot of types of customers by their bounce rate",xlab = "type of customers")
+qplot(x=new_customer, y=add_to_cart_rate, data=df,geom=c('jitter','boxplot'),fill = new_customer,alpha = 0.1,main = "Boxplot of types of customers by their Add to Cart rate",xlab = "type of customers")
+qplot(x=new_customer, y=conversion_rate, data=df,geom=c('jitter','boxplot'),fill = new_customer,alpha = 0.1,main = "Boxplot of types of customers by their Conversion rate",xlab = "type of customers")
+
+```
+
+```{r}
+##bivariate analysis
+qplot(conversion_rate,geom = "density" ,fill = new_customer,
+      data = subset(df,!is.na(new_customer)),alpha = I(0.5),main="Conversion rate for 2 types of customers")
+#new customer has higher conversion rate
+
+```
+
+
+```{r}
+#new customer has higher add to cart rate
+qplot(add_to_cart_rate,geom = "density" ,fill = new_customer,
+      data = subset(df,!is.na(new_customer)),alpha = I(0.5),main="Conversion rate for 2 types of customers")
+
+
+```
+
+```{r}
+###linear relation b/w orders, gross_sales
+Scatter.Plot <- ggplot(df, aes(x=orders, y=gross_sales)) 
+Scatter.Plot + geom_point(shape=19,alpha = 1/20) + geom_smooth(method = lm) +ggtitle("Correlation of number of orders with Gross Sales")
+
+```
+
+```{r}
+###bounce rate and site classified by new customer###
+#returned customers has higher boumce rate
+library(ggplot2)
+ggplot(aes(x=site,y=bounce_rate,fill = new_customer),data=subset(df))+ geom_boxplot(size=0.5,alpha=0.5) +ggtitle("Boxplot of Bounce Rate as per the site AND Type of Customers")
+
+```
+
+```{r}
+####number of customers as per the site name
+## to add legend and ret cust are more  -   univariate analysis
+plot <- ggplot(data = df, aes(x = site, fill=new_customer))
+plot + geom_bar(stat = "count",position="dodge") 
+```
+
+```{r}
+#scatterplot between product page view and visits - it is 0.903 and by graph, it is correlated.
+Scatter.Plot2 <- ggplot(df, aes(x=product_page_views, y=visits)) 
+Scatter.Plot2 + geom_point(shape=5,alpha = 1/10) + ggtitle("Relation Between Product page views and visits")
+cor.test(df$product_page_views,df$visits)
+
+```
+
+
+```{r}
+#scatterplot between conversion rate and add to cart rate
+Scatter.Plot1 <- ggplot(df, aes(x=conversion_rate, y=add_to_cart_rate)) 
+Scatter.Plot1 + geom_point(shape=10,alpha = 1/10) + geom_smooth(method = lm) + facet_grid(~site)
+Scatter.Plot1 + geom_point(shape=19,alpha = 1/20) + geom_smooth(method = lm)
+
+```
+
+```{r}
+
+#scatterplot between bounce rate and add to cart rate- negatively correlated..
+Scatter.Plot2 <- ggplot(df, aes(x=bounce_rate, y=add_to_cart_rate,colour = site )) 
+
+Scatter.Plot2 + geom_point(shape=19,alpha = 1/20) + geom_smooth(method = lm) 
+
+
+```
+
+```{R}
+###scatterplots between visits and distinct sessions
+Scatter.Plot2 <- ggplot(df, aes(x=visits, y=distinct_sessions)) 
+Scatter.Plot2 + geom_point(shape=10,alpha = 1/10) +ggtitle("Relation between distinct sessions and visits")
+
+Scatter.Plot3 <- ggplot(df, aes(x=bounce_rate, y=conversion_rate, colour = site)) 
+Scatter.Plot3 + geom_point(shape=19,alpha = 1/20) + geom_smooth(method = lm,fill="NA")
+```
+
+
+```{R}
+
+cor.test(df$conversion_rate,df$add_to_cart_rate)
+cor.test(df$bounce_rate,df$add_to_cart_rate)
+cor.test(df$conversion_rate,df$bounce_rate)
+
+cor.test(df$visits,df$distinct_sessions)
+```
+
+
